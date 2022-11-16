@@ -12,7 +12,7 @@ async def leaderboard(ctx):
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
-    sorted_players = dict(sorted(PLAYERS.items(), key=lambda item: item[1]))
+    sorted_players = dict(sorted(PLAYERS.items(), key=lambda item: item[1])[::-1])
     body = []
     for i, (k, v) in enumerate(sorted_players.items()):
         body.append([i+1, k, int(v)])
