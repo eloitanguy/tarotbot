@@ -240,8 +240,8 @@ async def game(ctx, value=-999):
 
     Attention, le nombre de points à rentrer doit être ENTIER!! Sinon la commande renverra une erreur.
 
-    Par exemple, si l'attaque ne fait que deux plis avec que des cartes valant 0.5 points, l'attaque a marqué 10 points
-    donc il faut rentrer "t/game 10".
+    Par exemple, si l'attaque ne fait que deux plis avec que des cartes valant 0.5 points, l'attaque a marqué 5 points
+    donc il faut rentrer "t/game 5".
     """
     reset_cache()
     v = int(value)
