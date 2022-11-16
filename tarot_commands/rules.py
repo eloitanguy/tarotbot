@@ -62,6 +62,9 @@ async def contrats(ctx):
 
 @commands.command()
 async def scores_descendante(ctx, n_players):
+    """
+    Scores à la descendante pour [n_players] joueurs
+    """
     n_players = int(n_players)
     body = []
     for r, s in DESCENDANTE_SCORES[n_players].items():
@@ -74,5 +77,3 @@ async def scores_descendante(ctx, n_players):
     )
 
     await ctx.send(f"Scores de Descendante à {str(n_players)} joueurs:\n```\n{output}\n```")
-
-
