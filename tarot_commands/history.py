@@ -20,6 +20,9 @@ def update_history(scores):
 
 @commands.command()
 async def undo_history(ctx):
+    """
+    Retire la dernière partie de l'historique (IRREVERSIBLE).
+    """
     with open('history.json', 'r') as f:
         HISTORY = json.load(f)
 

@@ -4,6 +4,9 @@ import json
 
 @commands.command()
 async def add_player(ctx, player_name):
+    """
+    Rajoute le joueur [player_name] au leaderboard.
+    """
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 

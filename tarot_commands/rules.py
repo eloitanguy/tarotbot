@@ -20,6 +20,9 @@ PRIMES = {
 
 @commands.command()
 async def poignees(ctx, n_players=5):
+    """
+    Donne le nombre d'atouts pour les différentes poignées selon le nombre de joueurs "n_players".
+    """
     if n_players not in [3, 4, 5]:
         await ctx.send('Le Tarot ne se joue pas à {}.'.format(n_players))
         return

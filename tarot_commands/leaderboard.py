@@ -6,6 +6,9 @@ import os
 
 @commands.command()
 async def leaderboard(ctx):
+    """
+    Montre le leaderboard.
+    """
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
@@ -38,6 +41,9 @@ def update_leaderboard(scores):
 
 @commands.command()
 async def undo_leaderboard(ctx):
+    """
+    Retire la dernière partie du leaderboard (IRREVERSIBLE).
+    """
     if not os.path.isfile('players.json'):
         await ctx.send('No backup to load!')
         return

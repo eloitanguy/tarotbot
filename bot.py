@@ -7,7 +7,6 @@ from tarot_commands.leaderboard import leaderboard, undo_leaderboard
 from tarot_commands.game import game
 from tarot_commands.rules import poignees, contrats
 from tarot_commands.history import undo_history
-from tarot_commands.h import h
 import os
 
 with open('config.json', 'r') as f:
@@ -36,5 +35,4 @@ bot.add_command(undo_history)
 bot.add_command(game)
 bot.add_command(poignees)
 bot.add_command(contrats)
-bot.add_command(h)
 bot.run(config['token'])
