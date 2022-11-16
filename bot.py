@@ -4,8 +4,8 @@ import json
 from tarot_commands.ping import ping
 from tarot_commands.add_player import add_player
 from tarot_commands.leaderboard import leaderboard, undo_leaderboard
-from tarot_commands.game import game
-from tarot_commands.rules import poignees, contrats
+from tarot_commands.game import game, descendante
+from tarot_commands.rules import poignees, contrats, scores_descendante
 from tarot_commands.history import undo_history
 import os
 
@@ -33,6 +33,8 @@ bot.add_command(leaderboard)
 bot.add_command(undo_leaderboard)
 bot.add_command(undo_history)
 bot.add_command(game)
+bot.add_command(descendante)
 bot.add_command(poignees)
 bot.add_command(contrats)
+bot.add_command(scores_descendante)
 bot.run(config['token'])

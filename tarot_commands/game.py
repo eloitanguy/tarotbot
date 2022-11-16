@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands
 import json
-from tarot_commands.rules import CONTRAT_PAR_BOUT, PRIMES
+from tarot_commands.rules import CONTRAT_PAR_BOUT, PRIMES, DESCENDANTE_SCORES
 from table2ascii import table2ascii as t2a
 from tarot_commands.leaderboard import update_leaderboard
 from tarot_commands.history import update_history
@@ -12,17 +12,19 @@ GLOBAL_BOUTS = None
 GLOBAL_PRIMES_ATTAQUE = []
 GLOBAL_PRIMES_DEFENSE = []
 GLOBAL_POINTS_ATTAQUE = None
+GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
 
 
 def reset_cache():
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
-        GLOBAL_POINTS_ATTAQUE
+        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS
     GLOBAL_ENCHERE = None
     GLOBAL_GAME_PLAYERS = {'Preneur': [], 'Partenaire': [], 'Défenseurs': []}
     GLOBAL_BOUTS = None
     GLOBAL_PRIMES_ATTAQUE = []
     GLOBAL_PRIMES_DEFENSE = []
     GLOBAL_POINTS_ATTAQUE = None
+    GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
 
 
 class SelectEnchere(discord.ui.Select):
@@ -77,20 +79,30 @@ class SelectPlayers(discord.ui.Select):
         ]
 
         self.role = role
-        max_values = 1 if self.role in ['Preneur', 'Partenaire'] else 4
+        max_values = 1 if self.role in ['Preneur', 'Partenaire', '#1', '#2', '#3', '#4', '#5'] else 4
         if self.role == 'Preneur':
             min_values = 1
-        elif self.role == 'Partenaire':
+        elif self.role in ['Partenaire', '#4', '#5']:
             min_values = 0
-        else:
+        elif self.role == 'Défenseurs':
             min_values = 2
+        elif self.role in ['#1', '#2', '#3']:
+            min_values = 1
+        else:
+            min_values = 0  # should never happen
+
         super().__init__(placeholder="{} {}:".format(emote, self.role),
                          max_values=max_values, min_values=min_values, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global GLOBAL_GAME_PLAYERS
-        GLOBAL_GAME_PLAYERS[self.role] = self.values
-        await interaction.response.send_message(content=f"Choix: {str(self.values)}!", ephemeral=True)
+        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_GAME_PLAYERS
+        if self.values:
+            if '#' in self.role:
+                GLOBAL_DESCENDANTE_PLAYERS[self.role] = self.values[0]
+                await interaction.response.send_message(content=f"Choix: {str(self.values[0])}!", ephemeral=True)
+            else:
+                GLOBAL_GAME_PLAYERS[self.role] = self.values
+                await interaction.response.send_message(content=f"Choix: {str(self.values)}!", ephemeral=True)
 
 
 class SelectPrimes(discord.ui.Select):
@@ -133,6 +145,16 @@ class SelectViewGame(discord.ui.View):
         self.add_item(SelectBouts())
 
 
+class SelectViewDescendante(discord.ui.View):
+    def __init__(self, *, timeout=300):
+        super().__init__(timeout=timeout)
+        self.add_item(SelectPlayers('#1', '😇️'))
+        self.add_item(SelectPlayers('#2', '😁️'))
+        self.add_item(SelectPlayers('#3', '😢'))
+        self.add_item(SelectPlayers('#4', '😨️️'))
+        self.add_item(SelectPlayers('#5', '😱'))
+
+
 class SelectViewPrimes(discord.ui.View):
     def __init__(self, *, timeout=300):
         super().__init__(timeout=timeout)
@@ -140,7 +162,7 @@ class SelectViewPrimes(discord.ui.View):
         self.add_item(SelectPrimes(attaque=False))
 
 
-class Buttons(discord.ui.View):
+class GameCalculButton(discord.ui.View):
     def __init__(self, *, timeout=180):
         super().__init__(timeout=timeout)
 
@@ -217,20 +239,53 @@ class Buttons(discord.ui.View):
             return
 
         scores = calcul_points()
-        body = []
-        for (k, v) in scores.items():
-            body.append([k, '{}{}'.format('+' if v >= 0 else '', int(v))])
-
-        output = t2a(
-            header=["Nom", "Score"],
-            body=body,
-            first_col_heading=True
-        )
-        await interaction.response.send_message(f"```\n{output}\n```")
         update_leaderboard(scores)
         update_history(scores)
         button.disabled = True  # After updating the score!
         reset_cache()
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(f"```\n{get_score_table_string(scores)}\n```")
+
+
+class DescendanteCalculButton(discord.ui.View):
+    def __init__(self, *, timeout=180):
+        super().__init__(timeout=timeout)
+
+    @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
+    async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
+        global GLOBAL_DESCENDANTE_PLAYERS
+
+        n_players = sum([bool(v) for v in GLOBAL_DESCENDANTE_PLAYERS.values()])
+
+        if not GLOBAL_DESCENDANTE_PLAYERS['#1'] or not GLOBAL_DESCENDANTE_PLAYERS['#2'] or \
+                not GLOBAL_DESCENDANTE_PLAYERS['#3']:
+            await interaction.response.send_message(
+                '#1, #2 ou #3 est vide.')
+            return
+
+        if n_players not in [3, 4, 5]:  # probably redundant
+            await interaction.response.send_message('Le Tarot ne se joue pas à {}.'.format(n_players))
+            return
+
+        if (not GLOBAL_DESCENDANTE_PLAYERS['#4']) and GLOBAL_DESCENDANTE_PLAYERS['#5']:
+            await interaction.response.send_message(
+                '#4 est vide mais pas #5, merci de juste remplir #4 pour un jeu à 4.')
+            return
+
+        test_unique_dict = {player: 0 for player in GLOBAL_DESCENDANTE_PLAYERS.values() if player}
+        if len(test_unique_dict) != n_players:
+            await interaction.response.send_message('Liste de joueurs non injective.')
+            return
+
+        scores = {player: DESCENDANTE_SCORES[n_players][rank]
+                  for (rank, player) in list(GLOBAL_DESCENDANTE_PLAYERS.items())[:n_players]}
+
+        update_leaderboard(scores)
+        update_history(scores)
+        button.disabled = True  # After updating the score!
+        reset_cache()
+        await interaction.response.edit_message(view=self)
+        await interaction.followup.send(f"```\n{get_score_table_string(scores)}\n```")
 
 
 @commands.command()
@@ -258,7 +313,7 @@ async def game(ctx, value=-999):
     GLOBAL_POINTS_ATTAQUE = v
     await ctx.send("Alors? 👀", view=SelectViewGame())
     await ctx.send("Des primes?", view=SelectViewPrimes())
-    await ctx.send("", view=Buttons())
+    await ctx.send("", view=GameCalculButton())
 
 
 def calcul_points():
@@ -292,3 +347,25 @@ def calcul_points():
         scores[def_name] = score_defense
 
     return scores
+
+
+@commands.command()
+async def descendante(ctx):
+    """
+    Entre une nouvelle partie en descendante
+    """
+    await ctx.send("Donner les joueurs par points croissants:", view=SelectViewDescendante())
+    await ctx.send("", view=DescendanteCalculButton())
+
+
+def get_score_table_string(scores):
+    body = []
+    for (k, v) in scores.items():
+        body.append([k, '{}{}'.format('+' if v >= 0 else '', int(v))])
+
+    output = t2a(
+        header=["Nom", "Score"],
+        body=body,
+        first_col_heading=True
+    )
+    return output

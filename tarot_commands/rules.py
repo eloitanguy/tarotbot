@@ -16,6 +16,11 @@ PRIMES = {
     "Chelem non annoncé": 200,
     "Chelem chuté": -200
 }
+DESCENDANTE_SCORES = {
+    3: {'#1': 24, '#2': 0, '#3': -24},
+    4: {'#1': 36, '#2': 12, '#3': -12, '#4': -36},
+    5: {'#1': 48, '#2': 24, '#3': 0, '#4': -24, '#5': -48}
+}
 
 
 @commands.command()
@@ -37,7 +42,7 @@ async def poignees(ctx, n_players=5):
         first_col_heading=True
     )
 
-    await ctx.send(f"```\n{output}\n```")
+    await ctx.send(f"Poignées à {str(n_players)} joueurs:\n```\n{output}\n```")
 
 
 @commands.command()
@@ -53,5 +58,21 @@ async def contrats(ctx):
     )
 
     await ctx.send(f"```\n{output}\n```")
+
+
+@commands.command()
+async def scores_descendante(ctx, n_players):
+    n_players = int(n_players)
+    body = []
+    for r, s in DESCENDANTE_SCORES[n_players].items():
+        body.append([r, str(s) if s < 0 else '+' + str(s)])
+
+    output = t2a(
+        header=["Rang", "Score"],
+        body=body,
+        first_col_heading=True
+    )
+
+    await ctx.send(f"Scores de Descendante à {str(n_players)} joueurs:\n```\n{output}\n```")
 
 
