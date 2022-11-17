@@ -13,11 +13,12 @@ GLOBAL_PRIMES_ATTAQUE = []
 GLOBAL_PRIMES_DEFENSE = []
 GLOBAL_POINTS_ATTAQUE = None
 GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
+GLOBAL_MISERES = []
 
 
 def reset_cache():
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
-        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS
+        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES
     GLOBAL_ENCHERE = None
     GLOBAL_GAME_PLAYERS = {'Preneur': [], 'Partenaire': [], 'Défenseurs': []}
     GLOBAL_BOUTS = None
@@ -25,6 +26,7 @@ def reset_cache():
     GLOBAL_PRIMES_DEFENSE = []
     GLOBAL_POINTS_ATTAQUE = None
     GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
+    GLOBAL_MISERES = []
 
 
 class SelectEnchere(discord.ui.Select):
@@ -79,7 +81,13 @@ class SelectPlayers(discord.ui.Select):
         ]
 
         self.role = role
-        max_values = 1 if self.role in ['Preneur', 'Partenaire', '#1', '#2', '#3', '#4', '#5'] else 4
+        if self.role == 'Misère':
+            max_values = 5
+        elif self.role == 'Défenseurs':
+            max_values = 4
+        else:  # Descendante #1->#5, Preneur, Partenaire, Misères
+            max_values = 1
+
         if self.role == 'Preneur':
             min_values = 1
         elif self.role in ['Partenaire', '#4', '#5']:
@@ -95,13 +103,16 @@ class SelectPlayers(discord.ui.Select):
                          max_values=max_values, min_values=min_values, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_GAME_PLAYERS
+        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_GAME_PLAYERS, GLOBAL_MISERES
         if self.values:
-            if '#' in self.role:
+            if '#' in self.role:  # Descendante
                 GLOBAL_DESCENDANTE_PLAYERS[self.role] = self.values[0]
                 await interaction.response.send_message(content=f"Choix: {str(self.values[0])}!", ephemeral=True)
-            else:
+            elif self.role != 'Misères':
                 GLOBAL_GAME_PLAYERS[self.role] = self.values
+                await interaction.response.send_message(content=f"Choix: {str(self.values)}!", ephemeral=True)
+            else:  # Misère
+                GLOBAL_MISERES = self.values
                 await interaction.response.send_message(content=f"Choix: {str(self.values)}!", ephemeral=True)
 
 
@@ -160,6 +171,7 @@ class SelectViewPrimes(discord.ui.View):
         super().__init__(timeout=timeout)
         self.add_item(SelectPrimes(attaque=True))
         self.add_item(SelectPrimes(attaque=False))
+        self.add_item(SelectPlayers('Misères', '😇️'))
 
 
 class GameCalculButton(discord.ui.View):
@@ -168,7 +180,8 @@ class GameCalculButton(discord.ui.View):
 
     @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
     async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
-        global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE
+        global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
+            GLOBAL_MISERES
 
         if not GLOBAL_GAME_PLAYERS['Preneur']:
             await interaction.response.send_message('Preneur?')
@@ -230,7 +243,7 @@ class GameCalculButton(discord.ui.View):
                 await interaction.response.send_message('Un seul Petit.')
                 return
 
-        if not GLOBAL_BOUTS:
+        if GLOBAL_BOUTS is None:
             await interaction.response.send_message('Pas de réponse pour les bouts.')
             return
 
@@ -238,7 +251,14 @@ class GameCalculButton(discord.ui.View):
             await interaction.response.send_message('Pas de réponse pour les enchères.')
             return
 
-        scores = calcul_points()
+        for player in GLOBAL_MISERES:
+            if not (player in GLOBAL_GAME_PLAYERS['Preneur'] or player in GLOBAL_GAME_PLAYERS['Partenaire']
+                    or player in GLOBAL_GAME_PLAYERS['Défenseurs']):
+                await interaction.response.send_message(
+                    'Le joueur {} est listé dans les misères mais ne joue pas.'.format(player))
+                return
+
+        scores = calcul_scores()
         update_leaderboard(scores)
         update_history(scores)
         button.disabled = True  # After updating the score!
@@ -250,10 +270,11 @@ class GameCalculButton(discord.ui.View):
 class DescendanteCalculButton(discord.ui.View):
     def __init__(self, *, timeout=180):
         super().__init__(timeout=timeout)
+        self.add_item(SelectPlayers('Misères', '😇️'))
 
     @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
     async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
-        global GLOBAL_DESCENDANTE_PLAYERS
+        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES
 
         n_players = sum([bool(v) for v in GLOBAL_DESCENDANTE_PLAYERS.values()])
 
@@ -277,9 +298,16 @@ class DescendanteCalculButton(discord.ui.View):
             await interaction.response.send_message('Liste de joueurs non injective.')
             return
 
+        for player in GLOBAL_MISERES:
+            if player not in [p for p in GLOBAL_DESCENDANTE_PLAYERS if p]:
+                await interaction.response.send_message(
+                    'Le joueur {} est listé dans les misères mais ne joue pas.'.format(player))
+                return
+
         scores = {player: DESCENDANTE_SCORES[n_players][rank]
                   for (rank, player) in list(GLOBAL_DESCENDANTE_PLAYERS.items())[:n_players]}
 
+        scores = affecte_miseres(scores)
         update_leaderboard(scores)
         update_history(scores)
         button.disabled = True  # After updating the score!
@@ -316,14 +344,13 @@ async def game(ctx, value=-999):
     await ctx.send("", view=GameCalculButton())
 
 
-def calcul_points():
+def calcul_scores():
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
         GLOBAL_POINTS_ATTAQUE
 
     # we consider all values to be legal (checked in the "calcul" button)
     delta = GLOBAL_POINTS_ATTAQUE - CONTRAT_PAR_BOUT[GLOBAL_BOUTS]
-    faite = delta >= 0
-    s = delta / abs(delta)
+    s = delta / abs(delta) if delta != 0 else 1
     primes_attaque = {k: (v if k in GLOBAL_PRIMES_ATTAQUE else 0) for (k, v) in PRIMES.items()}
     primes_defense = {k: (v if k in GLOBAL_PRIMES_DEFENSE else 0) for (k, v) in PRIMES.items()}
     score = GLOBAL_ENCHERE * (abs(delta) + 25 + s * (primes_attaque['Petit au bout'] - primes_defense['Petit au bout']))
@@ -345,6 +372,8 @@ def calcul_points():
 
     for def_name in GLOBAL_GAME_PLAYERS['Défenseurs']:
         scores[def_name] = score_defense
+
+    scores = affecte_miseres(scores)
 
     return scores
 
@@ -369,3 +398,16 @@ def get_score_table_string(scores):
         first_col_heading=True
     )
     return output
+
+
+def affecte_miseres(scores):
+    global GLOBAL_GAME_PLAYERS, GLOBAL_MISERES
+    all_players = GLOBAL_GAME_PLAYERS['Preneur'] + GLOBAL_GAME_PLAYERS['Partenaire'] + GLOBAL_GAME_PLAYERS['Défenseurs']
+    n_players = len(all_players)
+
+    for misere_player in GLOBAL_MISERES:
+        # misere_player will lose 10 in the following loop, so all other players give misere_player 10
+        scores[misere_player] += n_players * 10
+        for player in all_players:
+            scores[player] -= 10
+    return scores
