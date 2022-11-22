@@ -19,10 +19,14 @@ def update_history(scores):
 
 
 @commands.command()
-async def undo_history(ctx):
+async def undo_history(ctx, s='no'):
     """
     Retire la dernière partie de l'historique (IRREVERSIBLE).
     """
+    if s != 'IAMSURE':
+        await ctx.send('Are you sure though?')
+        return
+
     with open('history.json', 'r') as f:
         HISTORY = json.load(f)
 

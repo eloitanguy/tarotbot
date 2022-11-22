@@ -13,12 +13,13 @@ GLOBAL_PRIMES_ATTAQUE = []
 GLOBAL_PRIMES_DEFENSE = []
 GLOBAL_POINTS_ATTAQUE = None
 GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
+GLOBAL_DESCENDANTE_POINTS = []
 GLOBAL_MISERES = []
 
 
 def reset_cache():
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
-        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES
+        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES, GLOBAL_DESCENDANTE_POINTS
     GLOBAL_ENCHERE = None
     GLOBAL_GAME_PLAYERS = {'Preneur': [], 'Partenaire': [], 'Défenseurs': []}
     GLOBAL_BOUTS = None
@@ -26,6 +27,7 @@ def reset_cache():
     GLOBAL_PRIMES_DEFENSE = []
     GLOBAL_POINTS_ATTAQUE = None
     GLOBAL_DESCENDANTE_PLAYERS = {'#1': None, '#2': None, '#3': None, '#4': None, '#5': None}
+    GLOBAL_DESCENDANTE_POINTS = []
     GLOBAL_MISERES = []
 
 
@@ -90,12 +92,12 @@ class SelectPlayers(discord.ui.Select):
 
         if self.role == 'Preneur':
             min_values = 1
-        elif self.role in ['Partenaire', '#4', '#5']:
+        elif self.role in ['Partenaire']:
             min_values = 0
         elif self.role == 'Défenseurs':
             min_values = 2
-        elif self.role in ['#1', '#2', '#3']:
-            min_values = 1
+        elif self.role in ['#1', '#2', '#3', '#4', '#5']:  # Descendante: we give the right amount of SelectMenus
+            min_values = 1  # so all should be answered.
         else:
             min_values = 0  # should never happen
 
@@ -159,11 +161,10 @@ class SelectViewGame(discord.ui.View):
 class SelectViewDescendante(discord.ui.View):
     def __init__(self, *, timeout=300):
         super().__init__(timeout=timeout)
-        self.add_item(SelectPlayers('#1', '😇️'))
-        self.add_item(SelectPlayers('#2', '😁️'))
-        self.add_item(SelectPlayers('#3', '😢'))
-        self.add_item(SelectPlayers('#4', '😨️️'))
-        self.add_item(SelectPlayers('#5', '😱'))
+        global GLOBAL_DESCENDANTE_POINTS
+        n_players = len(GLOBAL_DESCENDANTE_POINTS)
+        for i in range(n_players):
+            self.add_item(SelectPlayers('#{}'.format(i + 1), '☂️️'))
 
 
 class SelectViewPrimes(discord.ui.View):
@@ -274,23 +275,12 @@ class DescendanteCalculButton(discord.ui.View):
 
     @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
     async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
-        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES
+        global GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES, GLOBAL_DESCENDANTE_POINTS
 
         n_players = sum([bool(v) for v in GLOBAL_DESCENDANTE_PLAYERS.values()])
 
-        if not GLOBAL_DESCENDANTE_PLAYERS['#1'] or not GLOBAL_DESCENDANTE_PLAYERS['#2'] or \
-                not GLOBAL_DESCENDANTE_PLAYERS['#3']:
-            await interaction.response.send_message(
-                '#1, #2 ou #3 est vide.')
-            return
-
-        if n_players not in [3, 4, 5]:  # probably redundant
-            await interaction.response.send_message('Le Tarot ne se joue pas à {}.'.format(n_players))
-            return
-
-        if (not GLOBAL_DESCENDANTE_PLAYERS['#4']) and GLOBAL_DESCENDANTE_PLAYERS['#5']:
-            await interaction.response.send_message(
-                '#4 est vide mais pas #5, merci de juste remplir #4 pour un jeu à 4.')
+        if n_players != len(GLOBAL_DESCENDANTE_POINTS):
+            await interaction.response.send_message('Merci de remplir toutes les entrées.')
             return
 
         test_unique_dict = {player: 0 for player in GLOBAL_DESCENDANTE_PLAYERS.values() if player}
@@ -304,8 +294,14 @@ class DescendanteCalculButton(discord.ui.View):
                     'Le joueur {} est listé dans les misères mais ne joue pas.'.format(player))
                 return
 
-        scores = {player: DESCENDANTE_SCORES[n_players][rank]
-                  for (rank, player) in list(GLOBAL_DESCENDANTE_PLAYERS.items())[:n_players]}
+        players = [p for p in GLOBAL_DESCENDANTE_PLAYERS.values() if p]
+        n_players = len(players)
+        scores = {p: 0 for p in players}
+        for idx, player in enumerate(players):
+            player_points = GLOBAL_DESCENDANTE_POINTS[idx]
+            scores[player] -= n_players * player_points  # will receive +player_points in the next loop
+            for player2 in players:  # this includes the current player!
+                scores[player2] += player_points
 
         scores = affecte_miseres(scores)
         update_leaderboard(scores)
@@ -379,11 +375,31 @@ def calcul_scores():
 
 
 @commands.command()
-async def descendante(ctx):
+async def descendante(ctx, *points):
     """
-    Entre une nouvelle partie en descendante
+    Entre une nouvelle partie en descendante.
+
+    Il faut donner les scores des joueurs, puis une interface demandera les noms des joueurs, et affectera les scores.
+
+    Par exemple "t/descendante 20 20 51" fera remplir les noms de 3 joueurs dont les points respectifs
+    sont 20, 20 et 51.
     """
-    await ctx.send("Donner les joueurs par points croissants:", view=SelectViewDescendante())
+    reset_cache()
+    global GLOBAL_DESCENDANTE_POINTS
+    points = [int(point) for point in points]
+    GLOBAL_DESCENDANTE_POINTS = points
+    n_players = len(points)
+
+    if n_players not in [3, 4, 5]:
+        await ctx.send('Le Tarot ne se joue pas à {}.'.format(n_players))
+        return
+
+    for point in points:
+        if point < 0 or point > 91:
+            await ctx.send('Points invalides: {}.'.format(point))
+            return
+
+    await ctx.send("Somme des points = {}.\nJoueurs respectifs:".format(sum(points)), view=SelectViewDescendante())
     await ctx.send("", view=DescendanteCalculButton())
 
 

@@ -1,0 +1,17 @@
+# cache
+__pycache__/
+tarot_commands/__pycache__/
+
+# tokens
+config.json
+
+# personal backups
+files_backup/
+
+# scores
+players.json
+players_backup.json
+history.json
+
+# test python file
+debug.py
