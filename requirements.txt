@@ -1,2 +1,4 @@
 discord.py~=2.1.0
 table2ascii
+numpy
+matplotlib

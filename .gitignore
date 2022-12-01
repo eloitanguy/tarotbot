@@ -12,6 +12,9 @@ files_backup/
 players.json
 players_backup.json
 history.json
+curves.png
 
 # test python file
 debug.py
+
+.idea/

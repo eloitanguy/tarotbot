@@ -7,6 +7,7 @@ from tarot_commands.leaderboard import leaderboard, undo_leaderboard
 from tarot_commands.game import game, descendante
 from tarot_commands.rules import poignees, contrats, scores_descendante
 from tarot_commands.history import undo_history
+from curves import curves
 import os
 
 with open('config.json', 'r') as f:
@@ -37,4 +38,5 @@ bot.add_command(descendante)
 bot.add_command(poignees)
 bot.add_command(contrats)
 bot.add_command(scores_descendante)
+bot.add_command(curves)
 bot.run(config['token'])

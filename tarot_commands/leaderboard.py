@@ -12,12 +12,22 @@ async def leaderboard(ctx):
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
+    with open('history.json', 'r') as f:
+        HISTORY = json.load(f)
+
     sorted_players = dict(sorted(PLAYERS.items(), key=lambda item: item[1])[::-1])
+    number_games_played = {p: 0 for p in sorted_players.keys()}
+
+    for player in sorted_players.keys():
+        for hist in HISTORY:
+            if player in hist['scores']:
+                number_games_played[player] += 1
+
     body = []
     for i, (k, v) in enumerate(sorted_players.items()):
-        body.append([i+1, k, int(v)])
+        body.append([i+1, k, int(v), int(number_games_played[k])])
     output = t2a(
-        header=["Rank", "Name", "Points"],
+        header=["Rank", "Name", "Points", "Games"],
         body=body,
         first_col_heading=True
     )
