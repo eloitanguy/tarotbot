@@ -25,9 +25,9 @@ async def leaderboard(ctx):
 
     body = []
     for i, (k, v) in enumerate(sorted_players.items()):
-        body.append([i+1, k, int(v), int(number_games_played[k])])
+        body.append([i+1, k, int(v), int(number_games_played[k]), int(v / number_games_played[k])])
     output = t2a(
-        header=["Rank", "Name", "Points", "Games"],
+        header=["Rank", "Name", "Points", "Games", "Ratio"],
         body=body,
         first_col_heading=True
     )
