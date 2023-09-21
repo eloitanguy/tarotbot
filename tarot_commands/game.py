@@ -1,10 +1,15 @@
 import discord
 from discord.ext import commands
 import json
-from tarot_commands.rules import CONTRAT_PAR_BOUT, PRIMES, DESCENDANTE_SCORES
+from tarot_commands.rules import CONTRAT_PAR_BOUT, PRIMES
 from table2ascii import table2ascii as t2a
 from tarot_commands.leaderboard import update_leaderboard
 from tarot_commands.history import update_history
+
+
+class ParseError(Exception):
+    pass
+
 
 GLOBAL_ENCHERE = None
 GLOBAL_GAME_PLAYERS = {'Preneur': [], 'Partenaire': [], 'Défenseurs': []}
@@ -294,15 +299,7 @@ class DescendanteCalculButton(discord.ui.View):
                     'Le joueur {} est listé dans les misères mais ne joue pas.'.format(player))
                 return
 
-        players = [p for p in GLOBAL_DESCENDANTE_PLAYERS.values() if p]
-        n_players = len(players)
-        scores = {p: 0 for p in players}
-        for idx, player in enumerate(players):
-            player_points = GLOBAL_DESCENDANTE_POINTS[idx]
-            scores[player] -= n_players * player_points  # will receive +player_points in the next loop
-            for player2 in players:  # this includes the current player!
-                scores[player2] += player_points
-
+        scores = calcul_score_descendante(GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_DESCENDANTE_POINTS)
         scores = affecte_miseres(scores)
         update_leaderboard(scores)
         update_history(scores)
@@ -374,6 +371,18 @@ def calcul_scores():
     return scores
 
 
+def calcul_score_descendante(descendante_players, descendante_points):
+    players = [p for p in descendante_players.values() if p]
+    n_players = len(players)
+    scores = {p: 0 for p in players}
+    for idx, player in enumerate(players):
+        player_points = descendante_points[idx]
+        scores[player] -= n_players * player_points  # will receive +player_points in the next loop
+        for player2 in players:  # this includes the current player!
+            scores[player2] += player_points
+    return scores
+
+
 @commands.command()
 async def descendante(ctx, *points):
     """
@@ -427,3 +436,54 @@ def affecte_miseres(scores):
         for player in all_players:
             scores[player] -= 10
     return scores
+
+
+def autoparse(msg):
+    global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
+        GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES, GLOBAL_DESCENDANTE_POINTS
+
+    enchere_name = None
+    enchere_idx = None
+    msg_list = msg.split(' ')
+    msg_lower_list = msg.split(' ')
+
+    if 'petite' in msg.lower():
+        GLOBAL_ENCHERE = 1
+        if 'garde' in msg.lower():
+            raise ParseError('Confused, found petite and garde in the message')
+        enchere_name = 'petite'
+    elif 'garde' in msg.lower():
+        if 'garde sans' in msg.lower():
+            GLOBAL_ENCHERE = 4
+            if 'garde contre' in msg.lower():
+                raise ParseError('Confused, found garde sans and garde contre in the message')
+            enchere_name = 'garde sans'
+        elif 'garde contre' in msg.lower():
+            GLOBAL_ENCHERE = 6
+            enchere_name = 'garde contre'
+        else:
+            GLOBAL_ENCHERE = 2  # garde
+            enchere_name = 'garde'
+    else:
+        raise ParseError('Confused, found no bid info')
+
+    try:
+        enchere_idx = msg_lower_list.find(enchere_name)  # TODO: handle two-word bids
+    except ValueError:
+        raise ParseError(f'Confused, could not find parsed bid {enchere_name}')
+
+    with open('players.json', 'r') as f:
+        PLAYERS = json.load(f)
+
+    preneur = msg_list[0]
+    if preneur not in PLAYERS:
+        raise ParseError(f'Confused, first word should be a player (Preneur), and {preneur} is not')
+    GLOBAL_GAME_PLAYERS['Preneur'] = [preneur]
+
+    scores = None
+    return scores
+
+
+@commands.command()
+async def auto(ctx, value):
+    return
