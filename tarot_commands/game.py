@@ -278,7 +278,6 @@ class GameCalculButton(discord.ui.View):
 class DescendanteCalculButton(discord.ui.View):
     def __init__(self, *, timeout=180):
         super().__init__(timeout=timeout)
-        self.add_item(SelectPlayers('Misères', '😇️'))
 
     @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
     async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -492,16 +491,30 @@ def find_split_idx_of_subsequence(s, sub, split=' '):
     return str_idx_to_split_idx(s, str_idx + len(sub) - 1, split)
 
 
+def clean_msg(msg):
+    return msg.replace('.', '').replace(',', '').replace(':', '').replace(';', '').replace("'", '').replace('"', '')
+
+
 def autoparse(msg):
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
         GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES, GLOBAL_DESCENDANTE_POINTS
 
     enchere_name = None
-    msg = msg.replace('.', '').replace(',', '').replace(':', '').replace(';', '')
+    msg = clean_msg(msg)
     msg_list = msg.split(' ')
     msg_lower_list = msg.lower().split(' ')
     msg_decode_lower = unidecode(msg).lower()
     msg_decode_lower_list = msg_decode_lower.split(' ')
+
+    with open('players.json', 'r') as f:
+        PLAYERS = json.load(f)
+
+    preneur = msg_list[0]
+    if preneur not in PLAYERS:
+        if unidecode(preneur).lower() in ['desc', 'descendante']:
+            return autoparse_desc(msg)
+        raise ParseError(f'Confused, first word should be a player (Preneur), and {preneur} is not')
+    GLOBAL_GAME_PLAYERS['Preneur'] = [preneur]
 
     if 'petite' in msg.lower():
         GLOBAL_ENCHERE = 1
@@ -536,14 +549,6 @@ def autoparse(msg):
     except ValueError:
         raise ParseError('Could not find required keyword <vs>')
 
-    with open('players.json', 'r') as f:
-        PLAYERS = json.load(f)
-
-    preneur = msg_list[0]
-    if preneur not in PLAYERS:
-        raise ParseError(f'Confused, first word should be a player (Preneur), and {preneur} is not')
-    GLOBAL_GAME_PLAYERS['Preneur'] = [preneur]
-
     avec_idx = None
     try:
         avec_idx = msg_lower_list.index('avec')
@@ -563,7 +568,7 @@ def autoparse(msg):
         for e in msg_list[avec_idx:vs_idx]:
             if e in PLAYERS:
                 avec_count += 1
-                GLOBAL_GAME_PLAYERS['Partenaire'] = e
+                GLOBAL_GAME_PLAYERS['Partenaire'].append(e)
             if avec_count > 1:
                 raise ParseError(f'Found more than one partenaire.')
 
@@ -658,16 +663,48 @@ def autoparse(msg):
         if found_scores > 1:
             raise ParseError(f'Found more than one number interpreted as score')
 
-    reparse = (f"Preneur: {GLOBAL_GAME_PLAYERS['Preneur']}, Score: {GLOBAL_POINTS_ATTAQUE}, Bouts: {GLOBAL_BOUTS}, "
-               f"Enchère: {enchere_name} ({GLOBAL_ENCHERE}), "
-               f"Défenseurs: {GLOBAL_GAME_PLAYERS['Défenseurs']}, Primes Attaque: {GLOBAL_PRIMES_ATTAQUE}, "
-               f"Primes Défense: {GLOBAL_PRIMES_DEFENSE}, Misères: {GLOBAL_MISERES}")
+    reparse = (f"Preneur:    {GLOBAL_GAME_PLAYERS['Preneur']},\n"
+               f"Partenaire: {GLOBAL_GAME_PLAYERS['Partenaire']},\n"
+               f"Score:      {GLOBAL_POINTS_ATTAQUE},\n"
+               f"Bouts:      {GLOBAL_BOUTS},\n"
+               f"Enchère:    {enchere_name} ({GLOBAL_ENCHERE}),\n"
+               f"Défense:    {GLOBAL_GAME_PLAYERS['Défenseurs']},\n"
+               f"Primes Att: {GLOBAL_PRIMES_ATTAQUE},\n"
+               f"Primes Déf: {GLOBAL_PRIMES_DEFENSE},\n"
+               f"Misères:    {GLOBAL_MISERES}")
 
     return reparse
 
 
+def autoparse_desc(msg):
+    """
+    Parses a message starting with 'descendante', then a names and scores. Updates the global params for descendante.
+    Omitting punctuation, assumes 'descendante <name1> <score1> <name2> <score2> ...'
+    """
+    msg = clean_msg(msg)
+    msg_list = msg.split(' ')
+
+    with open('players.json', 'r') as f:
+        PLAYERS = json.load(f)
+
+    player_idx = 1
+    for e_idx, e in enumerate(msg_list):
+        if e in PLAYERS:
+            if e_idx == len(msg_list) - 1 or not msg_list[e_idx + 1].isnumeric():
+                raise ParseError(f'Could not find a score for {e}')
+            GLOBAL_DESCENDANTE_PLAYERS[f'#{player_idx}'] = e
+            GLOBAL_DESCENDANTE_POINTS.append(int(msg_list[e_idx + 1]))
+            player_idx += 1
+
+    reparse = f"Descendante:\n"
+    for player_score, player in list(zip(GLOBAL_DESCENDANTE_POINTS, GLOBAL_DESCENDANTE_PLAYERS.values())):
+        reparse = reparse + f"{player}: {player_score},\n"
+
+    return reparse[:-2]  # removes last ,\n
+
+
 @commands.command()
-async def auto(ctx, value):
+async def auto(ctx, *, value):
     """
     Tente d'interpréter le message et d'affecter les scores en conséquence. Cliquer sur le bouton valide et affecte.
 
@@ -677,13 +714,20 @@ async def auto(ctx, value):
 
     Primes: 'prime attaque' ou 'prime défense' si nécessaire, et juste 'prime' est un raccourci pour Attaque
 
+    Descendante: commencer par 'Descendante' ou desc puis mettre nom, score, nom, score etc
+
     """
     reset_cache()
+    global GLOBAL_DESCENDANTE_POINTS
     try:
         reparse = autoparse(value)  # affects global values for the game information
     except ParseError as e:
         reset_cache()
         await ctx.send(e.args[0])
         return
-    msg = 'Is this parse correct?: ' + reparse
-    await ctx.send(msg, view=GameCalculButton())
+    msg = '**Is this parse correct?:**\n' + reparse
+    if reparse[:13] == 'Descendante:\n':  # parsed a descendante
+        await ctx.send(f"Somme des points = {sum(GLOBAL_DESCENDANTE_POINTS)}." + msg,
+                       view=DescendanteCalculButton())
+    else:  # parsed a normal game
+        await ctx.send(msg, view=GameCalculButton())
