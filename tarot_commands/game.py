@@ -5,6 +5,8 @@ from tarot_commands.rules import CONTRAT_PAR_BOUT, PRIMES
 from table2ascii import table2ascii as t2a
 from tarot_commands.leaderboard import update_leaderboard
 from tarot_commands.history import update_history
+from unidecode import unidecode
+from collections import OrderedDict
 
 
 class ParseError(Exception):
@@ -184,7 +186,7 @@ class GameCalculButton(discord.ui.View):
     def __init__(self, *, timeout=180):
         super().__init__(timeout=timeout)
 
-    @discord.ui.button(label="Calcul", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label='Calcul', style=discord.ButtonStyle.blurple)
     async def calcul(self, interaction: discord.Interaction, button: discord.ui.Button):
         global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
             GLOBAL_MISERES
@@ -438,14 +440,68 @@ def affecte_miseres(scores):
     return scores
 
 
+def str_idx_to_split_idx(s, str_idx, split=' '):
+    """
+    Gives the index in s.split(split) corresponding to the index str_idx in the string
+    Parameters
+    ----------
+    s : str
+        input string
+    str_idx : int
+        index within s
+    split : str, optional
+        split argument for s.split(split), default to ' '
+
+    Returns
+    -------
+    i : int
+    """
+    if s[str_idx] == split:
+        raise ValueError(f'Input string index {str_idx} corresponds to a split <{split}> in input string {s}')
+    if str_idx > len(s):
+        raise ValueError(f'index {str_idx} >= {len(s)} length of input string')
+    s_list = s.split(split)
+    split_start_idx_in_str = 0
+    for e_idx, e in enumerate(s_list):
+        if split_start_idx_in_str <= str_idx < split_start_idx_in_str + len(e):  # str_idx is in e
+            return e_idx
+        split_start_idx_in_str += len(e) + 1
+
+
+def find_split_idx_of_subsequence(s, sub, split=' '):
+    """
+    Finds the index within s.split(split) of the last element of sub.split(split)
+    For example if s = 'i am now a tuna', the output for split=' ' and sub='now a' is 3.
+
+    Parameters
+    ----------
+    s : str
+        input string
+    sub : str
+        substring to locate within s
+    split : str, optional
+        split argument for s.split(split), default to ' '
+
+    Returns
+    -------
+    i : int
+    """
+    str_idx = s.find(sub)  # let it raise ValueError if not found
+    if str_idx == -1:
+        raise ValueError(f'sub {sub} is not a substring of {s}')
+    return str_idx_to_split_idx(s, str_idx + len(sub) - 1, split)
+
+
 def autoparse(msg):
     global GLOBAL_ENCHERE, GLOBAL_GAME_PLAYERS, GLOBAL_BOUTS, GLOBAL_PRIMES_ATTAQUE, GLOBAL_PRIMES_DEFENSE, \
         GLOBAL_POINTS_ATTAQUE, GLOBAL_DESCENDANTE_PLAYERS, GLOBAL_MISERES, GLOBAL_DESCENDANTE_POINTS
 
     enchere_name = None
-    enchere_idx = None
+    msg = msg.replace('.', '').replace(',', '').replace(':', '').replace(';', '')
     msg_list = msg.split(' ')
-    msg_lower_list = msg.split(' ')
+    msg_lower_list = msg.lower().split(' ')
+    msg_decode_lower = unidecode(msg).lower()
+    msg_decode_lower_list = msg_decode_lower.split(' ')
 
     if 'petite' in msg.lower():
         GLOBAL_ENCHERE = 1
@@ -467,10 +523,18 @@ def autoparse(msg):
     else:
         raise ParseError('Confused, found no bid info')
 
+    # find bid location
+    enchere_idx = None
     try:
-        enchere_idx = msg_lower_list.find(enchere_name)  # TODO: handle two-word bids
+        enchere_idx = find_split_idx_of_subsequence(msg.lower(), enchere_name)
     except ValueError:
         raise ParseError(f'Confused, could not find parsed bid {enchere_name}')
+
+    vs_idx = None
+    try:
+        vs_idx = find_split_idx_of_subsequence(msg.lower(), 'vs')
+    except ValueError:
+        raise ParseError('Could not find required keyword <vs>')
 
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
@@ -480,10 +544,146 @@ def autoparse(msg):
         raise ParseError(f'Confused, first word should be a player (Preneur), and {preneur} is not')
     GLOBAL_GAME_PLAYERS['Preneur'] = [preneur]
 
-    scores = None
-    return scores
+    avec_idx = None
+    try:
+        avec_idx = msg_lower_list.index('avec')
+    except ValueError:
+        try:
+            avec_idx = msg_lower_list.index('with')
+        except ValueError:  # parsed 1 vs rest, check that only 1 name before vs
+            for e in msg_list[:vs_idx]:
+                if e in PLAYERS and e != preneur:
+                    raise ParseError(
+                        f'Parsed a 1 vs rest situation, but found an extra name '
+                        f'{e} other than the preneur {preneur} before vs')
+
+    # find partenaire name
+    if avec_idx is not None:
+        avec_count = 0
+        for e in msg_list[avec_idx:vs_idx]:
+            if e in PLAYERS:
+                avec_count += 1
+                GLOBAL_GAME_PLAYERS['Partenaire'] = e
+            if avec_count > 1:
+                raise ParseError(f'Found more than one partenaire.')
+
+    # determine segments for attack primes, defense primes and miseres
+    # misere
+    misere_idx = None
+    try:
+        misere_idx = msg_decode_lower_list.index('misere')
+    except ValueError:
+        try:
+            misere_idx = msg_lower_list.index('miseres')
+        except ValueError:
+            pass  # no misère
+
+    # primes
+    prime_a_idx, prime_d_idx = None, None
+    if 'prime' in msg.lower():
+        exists_prime_a = 'prime att' in msg_decode_lower or 'primes att' in msg_decode_lower
+        if exists_prime_a:  # find primes attaque something
+            try:
+                prime_a_idx = find_split_idx_of_subsequence(msg_decode_lower, 'prime att')
+            except ValueError:
+                try:
+                    prime_a_idx = find_split_idx_of_subsequence(msg_decode_lower, 'primes att')
+                except ValueError:
+                    raise ParseError(f'expected to find prime att(ack) but didnt')
+        exists_prime_d = 'prime def' in msg_decode_lower or 'primes def' in msg_decode_lower
+        if exists_prime_d:  # find prime(s) défense something
+            try:
+                prime_d_idx = find_split_idx_of_subsequence(msg_decode_lower, 'prime def')
+            except ValueError:
+                try:
+                    prime_d_idx = find_split_idx_of_subsequence(msg_decode_lower, 'primes def')
+                except ValueError:
+                    raise ParseError(f'expected to find prime def(ense) but didnt')
+        if not (exists_prime_a or exists_prime_d):  # only prime, assume for attack
+            try:
+                prime_a_idx = find_split_idx_of_subsequence(msg_decode_lower, 'prime')
+            except ValueError:
+                raise ParseError('Expected to find <prime> but didnt')
+
+    segments_idx = sorted([(k, v) for (k, v) in
+                          [('vs', vs_idx), ('prime_a', prime_a_idx), ('prime_d', prime_d_idx), ('misere', misere_idx)]
+                          if v is not None], key=lambda c: c[1])
+
+    # handle segment by segment
+    for seg_idx, (seg_name, seg_position) in enumerate(segments_idx):
+        next_seg_position = None if seg_idx == len(segments_idx) - 1 else segments_idx[seg_idx + 1][1]
+        segment_msg_list = msg_list[seg_position:next_seg_position]
+        segment_msg = ' '.join(segment_msg_list)
+        if seg_name == 'vs':
+            def_players_count = 0
+            for e in segment_msg_list:
+                if e in PLAYERS:
+                    GLOBAL_GAME_PLAYERS['Défenseurs'].append(e)
+                    def_players_count += 1
+            if def_players_count <= 1 or def_players_count >= 5:
+                raise ParseError(f'Parsed 1 or less defenders or 5 or more defenders in {segment_msg_list}')
+            if GLOBAL_GAME_PLAYERS['Partenaire'] and def_players_count != 3:
+                raise ParseError(f'Parsed {def_players_count}!=3 defenders in {segment_msg_list}, '
+                                 f'but found a partenaire')
+        elif seg_name == 'prime_a':
+            for prime_name in PRIMES.keys():
+                if unidecode(prime_name.lower()) in unidecode(segment_msg.lower()):
+                    GLOBAL_PRIMES_ATTAQUE.append(prime_name)
+
+        elif seg_name == 'prime_d':
+            for prime_name in PRIMES.keys():
+                if unidecode(prime_name.lower()) in unidecode(segment_msg.lower()):
+                    GLOBAL_PRIMES_DEFENSE.append(prime_name)
+
+        elif seg_name == 'misere':
+            for e in segment_msg_list:
+                if e in PLAYERS:
+                    GLOBAL_MISERES.append(e)
+
+    # find number of bouts: assume it's the only number between 0 and 3 separated by spaces
+    for bouts in [0, 1, 2, 3]:
+        found_bouts = 0
+        if str(bouts) in msg_list:
+            GLOBAL_BOUTS = bouts
+            found_bouts += 1
+        if found_bouts > 1:
+            raise ParseError(f'Found more than one number interpreted as bouts')
+
+    # find score: assume it's the only number over 4 separated by spaces in the msg
+    for e in msg_list:
+        found_scores = 0
+        if e.isnumeric() and int(e) >= 4:
+            GLOBAL_POINTS_ATTAQUE = int(e)
+            found_scores += 1
+        if found_scores > 1:
+            raise ParseError(f'Found more than one number interpreted as score')
+
+    reparse = (f"Preneur: {GLOBAL_GAME_PLAYERS['Preneur']}, Score: {GLOBAL_POINTS_ATTAQUE}, Bouts: {GLOBAL_BOUTS}, "
+               f"Enchère: {enchere_name} ({GLOBAL_ENCHERE}), "
+               f"Défenseurs: {GLOBAL_GAME_PLAYERS['Défenseurs']}, Primes Attaque: {GLOBAL_PRIMES_ATTAQUE}, "
+               f"Primes Défense: {GLOBAL_PRIMES_DEFENSE}, Misères: {GLOBAL_MISERES}")
+
+    return reparse
 
 
 @commands.command()
 async def auto(ctx, value):
-    return
+    """
+    Tente d'interpréter le message et d'affecter les scores en conséquence. Cliquer sur le bouton valide et affecte.
+
+    Elements de syntaxe imposés: (Attaque) 'vs' (Défense)
+
+    Partenaire: mot-clef 'avec' ou 'with'
+
+    Primes: 'prime attaque' ou 'prime défense' si nécessaire, et juste 'prime' est un raccourci pour Attaque
+
+    """
+    reset_cache()
+    try:
+        reparse = autoparse(value)  # affects global values for the game information
+    except ParseError as e:
+        reset_cache()
+        await ctx.send(e.args[0])
+        return
+    msg = 'Is this parse correct?: ' + reparse
+    await ctx.send(msg, view=GameCalculButton())

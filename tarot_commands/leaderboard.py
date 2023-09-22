@@ -1,7 +1,6 @@
 from discord.ext import commands
 import json
 from table2ascii import table2ascii as t2a
-import os
 
 
 @commands.command()
@@ -77,25 +76,3 @@ def update_leaderboard(scores):
 
     with open('players.json', 'w') as f:
         json.dump(PLAYERS, f, indent=4)
-
-
-@commands.command()
-async def undo_leaderboard(ctx, s='no'):
-    """
-    Retire la dernière partie du leaderboard (IRREVERSIBLE).
-    """
-    if s != 'IAMSURE':
-        await ctx.send('Are you sure though?')
-        return
-
-    if not os.path.isfile('players.json'):
-        await ctx.send('No backup to load!')
-        return
-
-    with open('players_backup.json', 'r') as f:
-        PLAYERS = json.load(f)
-
-    with open('players.json', 'w') as f:
-        json.dump(PLAYERS, f, indent=4)
-
-    await ctx.send('Undo successful!')

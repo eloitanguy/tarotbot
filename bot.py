@@ -3,10 +3,10 @@ from discord.ext import commands
 import json
 from tarot_commands.ping import ping
 from tarot_commands.add_player import add_player
-from tarot_commands.leaderboard import leaderboard, undo_leaderboard, leaderboard2
+from tarot_commands.leaderboard import leaderboard, leaderboard2
 from tarot_commands.game import game, descendante
 from tarot_commands.rules import poignees, contrats, scores_descendante
-from tarot_commands.history import undo_history
+from tarot_commands.undo import undo
 from curves import curves
 import os
 
@@ -32,8 +32,7 @@ bot.add_command(ping)
 bot.add_command(add_player)
 bot.add_command(leaderboard)
 bot.add_command(leaderboard2)
-bot.add_command(undo_leaderboard)
-bot.add_command(undo_history)
+bot.add_command(undo)
 bot.add_command(game)
 bot.add_command(descendante)
 bot.add_command(poignees)
