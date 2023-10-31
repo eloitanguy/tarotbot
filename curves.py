@@ -32,7 +32,7 @@ def render_curves():
     for p, i in player_to_idx.items():
         plt.plot(scores[:, i], label=p, color=cm(1 - (i + 1)/(n_players + 1)))
 
-    plt.legend()
+    plt.legend(loc='center left')
     plt.title('Le jeu tourne')
     plt.xlabel('temps')
     plt.ylabel('score')
