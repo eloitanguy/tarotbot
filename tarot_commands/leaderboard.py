@@ -3,11 +3,7 @@ import json
 from table2ascii import table2ascii as t2a
 
 
-@commands.command()
-async def leaderboard(ctx):
-    """
-    Montre le leaderboard.
-    """
+def leaderboard_text():
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
@@ -21,15 +17,10 @@ async def leaderboard(ctx):
         body=body,
         first_col_heading=True
     )
+    return f"```\n{output}\n```"
 
-    await ctx.send(f"```\n{output}\n```")
 
-
-@commands.command()
-async def leaderboard2(ctx):
-    """
-    Montre le leaderboard à ratios.
-    """
+def leaderboard2_text():
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
@@ -60,8 +51,25 @@ async def leaderboard2(ctx):
         body=body,
         first_col_heading=True
     )
+    return f"```\n{output}\n```"
 
-    await ctx.send(f"```\n{output}\n```")
+
+@commands.command()
+async def leaderboard(ctx):
+    """
+    Montre le leaderboard.
+    """
+    text = leaderboard_text()
+    await ctx.send(text)
+
+
+@commands.command()
+async def leaderboard2(ctx):
+    """
+    Montre le leaderboard à ratios.
+    """
+    text = leaderboard2_text()
+    await ctx.send(text)
 
 
 def update_leaderboard(scores):

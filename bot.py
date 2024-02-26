@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import json
 from tarot_commands.ping import ping
-from tarot_commands.add_player import add_player
+from tarot_commands.add_player import add_player, add_players
 from tarot_commands.leaderboard import leaderboard, leaderboard2
 from tarot_commands.game import game, descendante, auto
 from tarot_commands.rules import poignees, contrats, scores_descendante
@@ -40,4 +40,5 @@ bot.add_command(contrats)
 bot.add_command(scores_descendante)
 bot.add_command(curves)
 bot.add_command(auto)
+bot.add_command(add_players)
 bot.run(config['token'])
