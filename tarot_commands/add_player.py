@@ -44,5 +44,6 @@ async def add_players(ctx, *, msg):
     with open('players.json', 'w') as f:
         json.dump(PLAYERS, f, indent=4)
 
-    await ctx.send(f'Players {names_already_listed} are already listed!')
+    if names_already_listed:
+        await ctx.send(f'Players {names_already_listed} are already listed!')
     await ctx.send(f'Successfully added {names_added}.')

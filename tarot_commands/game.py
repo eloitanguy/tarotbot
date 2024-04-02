@@ -349,7 +349,7 @@ def calcul_scores():
     primes_defense = {k: (v if k in GLOBAL_PRIMES_DEFENSE else 0) for (k, v) in PRIMES.items()}
     score = GLOBAL_ENCHERE * (abs(delta) + 25 + s * (primes_attaque['Petit au bout'] - primes_defense['Petit au bout']))
     score += primes_attaque['Simple Poignée'] + primes_attaque['Double Poignée'] + primes_attaque['Triple Poignée'] \
-             + primes_defense['Simple Poignée'] + primes_defense['Double Poignée'] + primes_defense['Triple Poignée']
+             - primes_defense['Simple Poignée'] - primes_defense['Double Poignée'] - primes_defense['Triple Poignée']
 
     score += primes_attaque["Chelem annoncé"] + primes_attaque["Chelem non annoncé"] + primes_attaque["Chelem chuté"]
 
