@@ -1,17 +1,19 @@
-from discord.ext import commands
+from discord.ext import commands  # type: ignore
 import json
-from table2ascii import table2ascii as t2a
+from table2ascii import table2ascii as t2a  # type: ignore
+from math import sqrt
 
 
 def leaderboard_text():
     with open('players.json', 'r') as f:
         PLAYERS = json.load(f)
 
-    sorted_players = dict(sorted(PLAYERS.items(), key=lambda item: item[1])[::-1])
+    sorted_players = dict(
+        sorted(PLAYERS.items(), key=lambda item: item[1])[::-1])
 
     body = []
     for i, (k, v) in enumerate(sorted_players.items()):
-        body.append([i+1, k, int(v)])
+        body.append([i + 1, k, int(v)])
     output = t2a(
         header=["Rank", "Name", "Points"],
         body=body,
@@ -29,6 +31,8 @@ def leaderboard2_text():
 
     player_ratios = {p: 0 for p in PLAYERS.keys()}
     player_WL = {p: {'W': 0, 'L': 0} for p in PLAYERS.keys()}
+    player_means = {p: 0 for p in PLAYERS.keys()}
+    player_standard_deviations = {p: 0 for p in PLAYERS.keys()}
 
     for player, v in PLAYERS.items():
         for hist in HISTORY:
@@ -37,17 +41,28 @@ def leaderboard2_text():
                     player_WL[player]['W'] += 1
                 else:  # lost the game
                     player_WL[player]['L'] += 1
+            player_standard_deviations[player] += hist['scores'][player]**2
 
-        player_ratios[player] = int(v / (player_WL[player]['W'] + player_WL[player]['L'])) \
-            if player_WL[player]['W'] + player_WL[player]['L'] > 0 else 0
+    n_games = (player_WL[player]['W'] + player_WL[player]['L'])
+    player_means[player] = v / n_games if n_games > 0 else 0
 
-    sorted_players_ratios = dict(sorted(player_ratios.items(), key=lambda item: item[1])[::-1])
+    player_ratios[player] = int(player_means[player])
+
+    player_standard_deviations[player] -= n_games * player_means[player]**2
+    player_standard_deviations[player] = \
+        sqrt(player_standard_deviations[player] / (n_games - 1)) \
+        if n_games > 1 else 0
+
+    sorted_players_ratios = dict(
+        sorted(player_ratios.items(), key=lambda item: item[1])[::-1])
     body = []
     for i, (player, ratio) in enumerate(sorted_players_ratios.items()):
-        body.append([i+1, player, ratio,
-                     str(int(player_WL[player]['W'])) + '/' + str(int(player_WL[player]['L']))])
+        body.append(
+            [i + 1, player, ratio,
+             str(int(player_WL[player]['W'])) + '/' + str(int(player_WL[player]['L'])), player_standard_deviations[player]])
+
     output = t2a(
-        header=["Rank", "Name", "Points/Games", "W/L"],
+        header=["Rank", "Name", "Points/Games", "W/L", "Standard deviation"],
         body=body,
         first_col_heading=True
     )

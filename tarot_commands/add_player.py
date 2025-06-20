@@ -1,4 +1,4 @@
-from discord.ext import commands
+from discord.ext import commands  # type: ignore
 import json
 
 
@@ -40,7 +40,7 @@ async def add_players(ctx, *, msg):
         else:
             PLAYERS[player_name] = 0
             names_added.append(player_name)
-            
+
     with open('players.json', 'w') as f:
         json.dump(PLAYERS, f, indent=4)
 
