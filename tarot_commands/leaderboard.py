@@ -41,17 +41,18 @@ def leaderboard2_text():
                     player_WL[player]['W'] += 1
                 else:  # lost the game
                     player_WL[player]['L'] += 1
-            player_standard_deviations[player] += hist['scores'][player]**2
+                player_standard_deviations[player] += hist['scores'][player]**2
 
-    n_games = (player_WL[player]['W'] + player_WL[player]['L'])
-    player_means[player] = v / n_games if n_games > 0 else 0
+        n_games = (player_WL[player]['W'] + player_WL[player]['L'])
+        player_means[player] = v / n_games if n_games > 0 else 0
 
-    player_ratios[player] = int(player_means[player])
+        player_ratios[player] = int(player_means[player])
 
-    player_standard_deviations[player] -= n_games * player_means[player]**2
-    player_standard_deviations[player] = \
-        sqrt(player_standard_deviations[player] / (n_games - 1)) \
-        if n_games > 1 else 0
+        player_standard_deviations[player] -= n_games * player_means[player]**2
+        player_standard_deviations[player] = \
+            sqrt(player_standard_deviations[player] / (n_games - 1)) \
+            if n_games > 1 else 0
+        player_standard_deviations[player] = int(player_standard_deviations[player])
 
     sorted_players_ratios = dict(
         sorted(player_ratios.items(), key=lambda item: item[1])[::-1])
