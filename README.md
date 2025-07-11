@@ -41,6 +41,8 @@ To join a screen that is running, use:
 
 ### Starting a new season
 
-To start a new Tarot season, simply copy the files `history.json`,
+A discord command `t/new_season IAMSURE` starts a new season automatically!
+
+To start a new Tarot season, you can also simply copy the files `history.json`,
 `players.json` and `players_backup.json` to some other location for safekeeping,
 then re-start the bot (CTRL+C the script and run it again).

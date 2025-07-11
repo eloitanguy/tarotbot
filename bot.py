@@ -7,6 +7,7 @@ from tarot_commands.leaderboard import leaderboard, leaderboard2
 from tarot_commands.game import game, descendante, auto
 from tarot_commands.rules import poignees, contrats, scores_descendante
 from tarot_commands.undo import undo
+from tarot_commands.new_season import new_season
 from curves import curves
 import os
 
@@ -41,4 +42,5 @@ bot.add_command(scores_descendante)
 bot.add_command(curves)
 bot.add_command(auto)
 bot.add_command(add_players)
+bot.add_command(new_season)
 bot.run(config['token'])
